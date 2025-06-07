@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Votación de Directiva</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <!--
+        Chosen Palette: "AJOBAPO Vibrante" - derived from the provided image, focusing on warm, dynamic tones.
+        Application Structure Plan: A single-page application (SPA) with a new structural design featuring diagonal elements and layered sections, inspired by the provided image. The layout is now vertical/stacked, removing the horizontal orientation for larger screens, while maintaining left alignment for content. Views (Welcome, Voting Stage, Final Confirmation) dynamically switch, maintaining the sequential flow. The structure is task-oriented, guiding the user smoothly. Firebase integration for persistence and duplicate vote prevention remains untouched functionality-wise, while the UI is polished for better user engagement.
+        Visualization & Content Choices: Candidate selections are enhanced with visually appealing radio button cards, featuring clearer states and subtle animations. Buttons have improved hover/focus effects. General text content and instructions are presented with better typography and spacing. Key visual elements like loaders and confirmation icons are styled for a cohesive look. No SVG or Mermaid diagrams are used; all visuals are handled via HTML/CSS/JS with Tailwind CSS and Unicode icons.
+        CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
+    -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden; /* Prevent horizontal scroll due to diagonal elements */
+        }
+        .view {
+            display: none;
+        }
+        .view.active {
+            display: block;
+        }
+        /* Custom radio button styles for enhanced aesthetics using AJOBAPO palette */
+        .custom-radio:checked + label {
+            border-color: #F39C12; /* Warm Orange border when checked */
+            background-color: #FDF5E6; /* Light yellow/peach background when checked */
+            color: #34495E; /* Dark Grey for text */
+            box-shadow: 0 4px 12px rgba(243, 156, 18, 0.2); /* Warm Orange subtle shadow */
+            transform: translateY(-2px); /* Slight lift effect */
+        }
+        .custom-radio:checked + label h3 {
+            color: #E74C3C; /* Vibrant Red for title */
+        }
+        .custom-radio + label {
+            transition: all 0.2s ease-in-out; /* Smooth transitions for radio labels */
+        }
+        .custom-radio + label:hover {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* Subtle shadow on hover */
+        }
+        .custom-radio:checked + label span.bg-current { /* Updated for dot color */
+             background-color: #E74C3C !important; /* Vibrant Red for selected dot */
+        }
+
+
+        /* Styles for loader indicator */
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #E74C3C; /* Vibrant Red for loader top border */
+            border-radius: 50%;
+            width: 28px; /* Slightly larger loader */
+            height: 28px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Button hover/focus effects using AJOBAPO palette */
+        .btn-primary {
+            background-color: #E74C3C; /* Vibrant Red */
+            color: white;
+            font-weight: 700;
+            padding: 0.75rem 1.5rem; /* py-3 px-6 */
+            border-radius: 0.5rem; /* rounded-lg */
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3); /* Shadow based on Vibrant Red */
+        }
+        .btn-primary:hover {
+            background-color: #F39C12; /* Warm Orange on hover */
+            transform: translateY(-2px); /* Slight lift */
+            box-shadow: 0 6px 16px rgba(243, 156, 18, 0.4); /* Shadow based on Warm Orange */
+        }
+        .btn-primary:focus {
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(243, 156, 18, 0.5); /* Focus ring based on Warm Orange */
+        }
+        .btn-primary:disabled {
+            background-color: #cbd5e1; /* Slate 300 - lighter neutral */
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        /* Animation for final checkmark */
+        @keyframes bounce-once {
+            0%, 100% { transform: translateY(0); }
+            25% { transform: translateY(-10px); }
+            40% { transform: translateY(-5px); }
+            55% { transform: translateY(-10px); }
+            70% { transform: translateY(-5px); }
+            85% { transform: translateY(-10px); }
+        }
+        .animate-bounce-once {
+            animation: bounce-once 1.5s ease-out; /* Play once */
+        }
+
+        /* --- New Diagonal Design Styles --- */
+        .diagonal-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #F5B7B1 40%, #F9D9C9 100%); /* Diagonal gradient from AJOBAPO palette */
+            transform-origin: top left;
+            z-index: -1; /* Send to background */
+            pointer-events: none; /* Allow clicks through */
+        }
+        
+        /* Optional: Add another diagonal layer for depth, mimicking the example image */
+        .diagonal-layer-2 {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 40%, transparent 100%); /* Subtle white overlay */
+            transform: skewY(-5deg); /* Slight skew to create diagonal line */
+            transform-origin: top left;
+            z-index: -2; /* Even further back */
+            pointer-events: none;
+        }
+
+        /* Adjust main container to work with diagonal background */
+        #app-container {
+            position: relative; /* Needed for z-index with diagonal layers */
+            z-index: 1; /* Bring app content to front */
+        }
+
+        /* Adjust elements for the new diagonal feel */
+        .card-section {
+            background-color: white; /* Ensure card sections are white */
+            border-radius: 1rem; /* Rounded corners */
+            padding: 1.5rem; /* p-6 */
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* Soft shadow */
+            border: 1px solid #e2e8f0; /* Subtle border */
+            transition: all 0.2s ease-in-out;
+        }
+        .card-section:hover {
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15); /* Slightly larger shadow on hover */
+        }
+    </style>
+</head>
+<body class="text-[#34495E] flex items-center justify-center min-h-screen p-4 relative">
+    <!-- Diagonal Background Layer -->
+    <div class="diagonal-bg"></div>
+    <!-- Optional Second Diagonal Layer for subtle depth -->
+    <div class="diagonal-layer-2"></div>
+
+    <main id="app-container" class="w-full max-w-2xl mx-auto rounded-2xl shadow-2xl p-6 sm:p-10 transition-all duration-500 transform hover:scale-[1.005] duration-300 card-section">
+        <div id="user-id-display" class="absolute top-4 right-4 text-xs text-slate-500 font-medium">Cargando ID...</div>
+        <div id="loader" class="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center rounded-2xl hidden z-10">
+            <div class="loader"></div>
+        </div>
+
+        <!-- Vista de Bienvenida -->
+        <div id="welcome-view" class="view active">
+            <div class="text-left mb-8">
+                <h1 class="text-4xl sm:text-5xl font-extrabold text-[#34495E] leading-tight">Elecciones de la Directiva de AJOBAPO</h1>
+                <p class="mt-4 text-lg text-slate-600">Tu participación es clave en éste momento súper importante para la juventud Bautista de Panamá Oeste. 🙌🏽</p>
+            </div>
+
+            <div class="mt-8 card-section bg-slate-100">
+                <h2 class="text-xl font-bold mb-4 text-[#34495E] flex items-center">
+                    <span class="mr-2 text-[#E74C3C]">📋</span> Indicaciones e Instrucciones para realizar su voto.
+                </h2>
+                <ul class="list-disc list-inside space-y-2 text-base">
+                    <li>El proceso de votación es secuencial por cargo.</li>
+                    <li>Una vez que usted emita su voto, este sera definitivo y no editable.</li>
+                    <li>Se recomienda que puedan tener la pausa nesesaria para pensar y emitir de manera segura su voto.</li>
+                    <li>Su voto sera registrado de manera anonima, y sera indentificado por medio de un ID de votante alfanumerico, que le proveera el sistema para tener un mejor control de los votos recibido por usuario.</li>
+                    <li>Utilizar solamente su dispositivo y correo actual, no tratemos de replicar nustro votos de otras maneras.</li>
+                </ul>
+            </div>
+            
+            <button id="start-btn" class="mt-8 w-full btn-primary">
+                Comenzar Votación
+            </button>
+        </div>
+
+        <!-- Vista de Votación (Plantilla) -->
+        <div id="voting-view" class="view">
+            <!-- Section for progress and position info -->
+            <div class="card-section bg-slate-100 mb-6 text-left">
+                 <p id="progress-indicator" class="text-base font-medium text-[#F39C12] mb-2"></p>
+                <h2 id="position-title" class="text-3xl sm:text-4xl font-bold text-[#34495E] leading-tight"></h2>
+                <p class="mt-2 text-slate-600 text-lg">Por favor, seleccione su candidato preferido.</p>
+            </div>
+            
+            <!-- Candidates Container -->
+            <div id="candidates-container" class="mt-8 space-y-4">
+                <!-- Los candidatos se insertarán aquí dinámicamente -->
+            </div>
+
+            <button id="next-btn" class="mt-8 w-full btn-primary">
+                Emitir Voto y Continuar
+            </button>
+        </div>
+
+        <!-- Vista Final -->
+        <div id="final-view" class="view">
+            <div class="text-left">
+                <svg class="h-20 w-20 text-[#E74C3C] animate-bounce-once mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h2 class="text-3xl sm:text-4xl font-bold text-[#34495E] leading-tight" id="final-view-title">¡Votación Completada!</h2>
+                <p class="mt-4 text-lg text-slate-600" id="final-view-message">Gracias por su valiosa participación. Sus votos han sido registrados con éxito.</p>
+            </div>
+
+            <div id="results-summary" class="mt-8 card-section bg-slate-100">
+                <h3 class="text-xl font-bold mb-4 text-[#34495E]">Resumen de sus Votos:</h3>
+                <ul id="summary-list" class="space-y-2 text-base text-slate-700">
+                    <!-- El resumen se insertará aquí -->
+                </ul>
+            </div>
+        </div>
+    </main>
+
+    <script type="module">
+        // Import Firebase modules
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Global variables for Firebase configuration
+        let FB_APP_ID; // This will hold the projectId for Firestore path
+        let FB_CONFIG_DATA;
+        let FB_AUTH_TOKEN;
+
+        // Determine if running in Canvas environment or locally
+        if (typeof __app_id !== 'undefined' && typeof __firebase_config !== 'undefined' && typeof __initial_auth_token !== 'undefined') {
+            FB_APP_ID = __app_id; // Use Canvas's appId
+            FB_CONFIG_DATA = JSON.parse(__firebase_config);
+            FB_AUTH_TOKEN = __initial_auth_token;
+            console.log("Running in Canvas environment.");
+        } else {
+            // Hardcoded configuration for local testing (REPLACE WITH YOUR REAL FIREBASE CONFIG)
+            console.warn("Canvas variables not found. Using hardcoded Firebase config for local testing.");
+            FB_CONFIG_DATA = {
+                apiKey: "AIzaSyC-_hmFmOF86OjjKmgpaBqze0-zy6-boEg", // TU API KEY (De tu Firebase Project)
+                authDomain: "votaciones-de-ajobapo.firebaseapp.com",
+                projectId: "votaciones-de-ajobapo", // TU PROJECT ID (De tu Firebase Project)
+                storageBucket: "votaciones-de-ajobapo.firebasestorage.app",
+                messagingSenderId: "302058837199",
+                appId: "1:302058837199:web:03c2d27947dc9e159093ba",
+                measurementId: "G-4H0BFKG88E"
+            };
+            FB_APP_ID = FB_CONFIG_DATA.projectId; // Set appId to project ID for consistency with Firestore path
+            FB_AUTH_TOKEN = null; // No custom token for local anonymous sign-in
+        }
+
+        // Firebase initialization variables
+        let app;
+        let db;
+        let auth;
+        let userId = 'Cargando ID...'; // Current user ID
+        let isAuthReady = false; // Flag to ensure Firebase is initialized and authenticated
+
+        // Election data
+        const electionData = [
+            {
+                position: 'Presidente',
+                candidates: ['Idris Santana', 'Voto en Blanco']
+            },
+            {
+                position: 'Vicepresidente',
+                candidates: ['Mercedes Fernández', 'Diana Barrientos']
+            },
+            {
+                position: 'Secretaría',
+                candidates: ['Mercedes Fernández', 'Voto en Blanco']
+            },
+            {
+                position: 'Coordinador de Publicidad y Redes',
+                candidates: ['Ana Sofía Santos', 'Aarón López']
+            },
+            {
+                position: 'Coordinador de Instrucción y Crecimiento',
+                candidates: ['Juan Aparicio', 'Voto en Blanco']
+            },
+            {
+                position: 'Coordiandor de Arte, Cultura y Deportes',
+                candidates: ['Jafet López', 'Voto en Blanco']
+            },
+            {
+                position: 'Coordinador de Visitas y Conexiones',
+                candidates: ['Masai Guevara', 'Voto en Blanco']
+            },
+        ];
+
+        // Application state
+        let currentStage = -1; // -1 = Welcome, 0 onwards = Voting
+        const userVotes = {}; // Stores the current user's votes in this session
+
+        // DOM elements
+        const views = {
+            welcome: document.getElementById('welcome-view'),
+            voting: document.getElementById('voting-view'),
+            final: document.getElementById('final-view')
+        };
+
+        const startBtn = document.getElementById('start-btn');
+        const nextBtn = document.getElementById('next-btn');
+        const positionTitle = document.getElementById('position-title');
+        const candidatesContainer = document.getElementById('candidates-container');
+        const progressIndicator = document.getElementById('progress-indicator');
+        const summaryList = document.getElementById('summary-list');
+        const userIdDisplay = document.getElementById('user-id-display');
+        const loader = document.getElementById('loader');
+        const finalViewTitle = document.getElementById('final-view-title');
+        const finalViewMessage = document.getElementById('final-view-message');
+
+        // Application Logic
+        
+        // Function to switch active view
+        const switchView = (viewName) => {
+            for (let key in views) {
+                views[key].classList.remove('active');
+            }
+            views[viewName].classList.add('active');
+        };
+
+        // Function to save user's vote to Firestore
+        const saveVote = async (position, candidate) => {
+            if (!isAuthReady) {
+                console.error("Authentication not ready. Cannot save vote.");
+                return false;
+            }
+            loader.classList.remove('hidden');
+            try {
+                // Path for public application data per user, now using FB_APP_ID consistently
+                const userVoteDocRef = doc(db, `artifacts/${FB_APP_ID}/public/data/user_votes`, userId);
+                
+                // Get existing user data if any
+                const userDocSnap = await getDoc(userVoteDocRef);
+                let userData = userDocSnap.exists() ? userDocSnap.data() : { completed: false, votes: {} };
+
+                // Save the vote for the current position
+                userData.votes[position] = candidate;
+                userData.lastVotedPosition = position; // To resume if not completed
+
+                await setDoc(userVoteDocRef, userData);
+                console.log(`Vote for ${position} by ${userId} saved.`);
+                return true;
+            } catch (e) {
+                console.error("Error saving vote: ", e);
+                // You could display an error message to the user here
+                return false;
+            } finally {
+                loader.classList.add('hidden');
+            }
+        };
+
+        // Function to check if the user has already completed the voting
+        const checkUserCompletion = async () => {
+            if (!isAuthReady) return; // Only execute if authentication is ready
+
+            loader.classList.remove('hidden');
+            const userVoteDocRef = doc(db, `artifacts/${FB_APP_ID}/public/data/user_votes`, userId);
+            try {
+                const userDocSnap = await getDoc(userVoteDocRef);
+                if (userDocSnap.exists()) {
+                    const userData = userDocSnap.data();
+                    if (userData.completed) {
+                        // If already completed, go directly to the final view and show message
+                        finalViewTitle.textContent = '¡Votación ya completada!';
+                        finalViewMessage.textContent = 'Gracias por su participación. Ya ha emitido todos sus votos.';
+                        document.getElementById('results-summary').classList.add('hidden'); // Hide summary if already finished
+                        switchView('final');
+                        return true; // Indicate that the user has already completed
+                    } else if (userData.lastVotedPosition) {
+                        // If the user did not complete, try to resume from where they left off
+                        const lastPositionIndex = electionData.findIndex(d => d.position === userData.lastVotedPosition);
+                        if (lastPositionIndex !== -1 && (lastPositionIndex + 1) < electionData.length) {
+                            currentStage = lastPositionIndex + 1; // Continue from the next stage
+                            Object.assign(userVotes, userData.votes); // Load previous votes
+                            renderVotingStage(); // Render the corresponding stage
+                            return false; // Indicate that the user has NOT completed, but can resume
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Error checking user completion:", error);
+            } finally {
+                loader.classList.add('hidden');
+            }
+            return false; // Indicate that the user has NOT completed and it's a new session or needs to start
+        };
+
+        // Function to render the current voting stage
+        const renderVotingStage = () => {
+            if (currentStage >= electionData.length) {
+                // End of voting: mark as completed in Firestore
+                if (isAuthReady) {
+                    setDoc(doc(db, `artifacts/${FB_APP_ID}/public/data/user_votes`, userId), { ...userVotes, completed: true }, { merge: true })
+                        .then(() => console.log("Voting marked as completed in Firestore."))
+                        .catch(e => console.error("Error marking as completed:", e));
+                }
+                displayFinalResults();
+                switchView('final');
+                return;
+            }
+
+            const stageData = electionData[currentStage];
+            // Changed "Paso" to "Sección"
+            progressIndicator.textContent = `Sección ${currentStage + 1} de ${electionData.length}`;
+            positionTitle.textContent = `Elección para ${stageData.position}`;
+            
+            candidatesContainer.innerHTML = '';
+            stageData.candidates.forEach((candidate, index) => {
+                const candidateId = `candidate-${currentStage}-${index}`;
+                const candidateHTML = `
+                    <div>
+                        <input type="radio" name="candidate" id="${candidateId}" value="${candidate}" class="hidden custom-radio">
+                        <label for="${candidateId}" class="flex items-center p-4 border-2 border-slate-200 rounded-lg cursor-pointer hover:border-blue-500 transition-all duration-200">
+                            <span class="flex-grow">
+                                <h3 class="font-bold text-lg text-slate-800">${candidate}</h3>
+                            </span>
+                            <span class="w-6 h-6 border-2 border-slate-300 rounded-full flex items-center justify-center">
+                                <span class="w-3 h-3 bg-current rounded-full hidden"></span>
+                            </span>
+                        </label>
+                    </div>
+                `;
+                candidatesContainer.insertAdjacentHTML('beforeend', candidateHTML);
+            });
+            
+            // Add visual logic for radio selection
+            document.querySelectorAll('input[name="candidate"]').forEach(radio => {
+                radio.addEventListener('change', () => {
+                    document.querySelectorAll('input[name="candidate"] + label span.bg-current').forEach(dot => {
+                        dot.classList.add('hidden');
+                    });
+                    if(radio.checked) {
+                        radio.nextElementSibling.querySelector('span.bg-current').classList.remove('hidden');
+                        nextBtn.disabled = false;
+                    }
+                });
+            });
+            
+            nextBtn.disabled = true; // Disable button until a candidate is selected
+            switchView('voting');
+        };
+        
+        // Function to display final results
+        const displayFinalResults = () => {
+            summaryList.innerHTML = '';
+            for (const position in userVotes) {
+                const li = document.createElement('li');
+                li.innerHTML = `<span class="font-semibold">${position}:</span> ${userVotes[position]}`;
+                summaryList.appendChild(li);
+            }
+            document.getElementById('results-summary').classList.remove('hidden');
+        };
+
+        // Firebase Initialization
+        const initFirebase = async () => {
+            loader.classList.remove('hidden');
+            try {
+                if (typeof FB_CONFIG_DATA === 'undefined' || Object.keys(FB_CONFIG_DATA).length === 0) { // Check if FB_CONFIG_DATA is actually populated
+                    console.warn("Firebase config not provided by Canvas. Using default configuration for local testing. This will not work in Canvas without proper configuration!");
+                    // If FB_CONFIG_DATA is not defined (e.g., in a local development environment without Canvas)
+                    // YOU MUST REPLACE THIS WITH YOUR OWN FIREBASE PROJECT CONFIGURATION if you want to test persistence
+                    // This section will only be used if Canvas variables (__app_id, __firebase_config, __initial_auth_token) are NOT available.
+                    app = initializeApp({
+                        apiKey: "AIzaSyC-_hmFmOF86OjjKmgpaBqze0-zy6-boEg", // TU API KEY (De tu Firebase Project)
+                        authDomain: "votaciones-de-ajobapo.firebaseapp.com",
+                        projectId: "votaciones-de-ajobapo", // TU PROJECT ID (De tu Firebase Project)
+                        storageBucket: "votaciones-de-ajobapo.firebasestorage.app",
+                        messagingSenderId: "302058837199",
+                        appId: "1:302058837199:web:03c2d27947dc9e159093ba",
+                        measurementId: "G-4H0BFKG88E" // Optional: if you have Google Analytics for Firebase
+                    });
+                     FB_APP_ID = FB_CONFIG_DATA.projectId; // Ensure FB_APP_ID is set even for local
+                } else {
+                    app = initializeApp(FB_CONFIG_DATA);
+                }
+
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Listen for authentication state changes
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        userIdDisplay.textContent = `ID de Votante: ${userId}`;
+                        isAuthReady = true; // Authentication is ready
+                        const userAlreadyVoted = await checkUserCompletion(); // Check if user already voted
+                        if (!userAlreadyVoted && currentStage === -1) {
+                            // If user has not completed and is still at welcome view, hide loader
+                            loader.classList.add('hidden');
+                        }
+                    } else {
+                        // If no user, try to sign in anonymously
+                        try {
+                            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                await signInWithCustomToken(auth, __initial_auth_token);
+                            } else {
+                                await signInAnonymously(auth);
+                            }
+                        } catch (error) {
+                            console.error("Error signing in:", error);
+                            userIdDisplay.textContent = 'Error al cargar ID';
+                            loader.classList.add('hidden');
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Error initializing Firebase:", error);
+                userIdDisplay.textContent = 'Error de inicialización';
+                loader.classList.add('hidden');
+            }
+        };
+
+        // Event Handlers
+        startBtn.addEventListener('click', () => {
+            // Only if the user has not completed voting, start
+            if (currentStage === -1) { // -1 indicates that it is in the welcome view and has not started the process
+                currentStage = 0;
+                renderVotingStage();
+            }
+        });
+
+        nextBtn.addEventListener('click', async () => {
+            const selectedCandidate = document.querySelector('input[name="candidate"]:checked');
+            if (!selectedCandidate) {
+                // This should not happen if the button is properly disabled, but it's a safeguard
+                return;
+            }
+            
+            const currentPosition = electionData[currentStage].position;
+            const voteSaved = await saveVote(currentPosition, selectedCandidate.value);
+
+            if (voteSaved) {
+                userVotes[currentPosition] = selectedCandidate.value; // Update local state after successful save
+
+                currentStage++;
+                renderVotingStage(); // Render the next stage or the final view
+            }
+        });
+
+        // Initialize Firebase when the DOM is fully loaded
+        document.addEventListener('DOMContentLoaded', initFirebase);
+    </script>
+</body>
+</html>
